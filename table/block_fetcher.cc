@@ -228,6 +228,7 @@ inline void BlockFetcher::GetBlockContents() {
 
 IOStatus BlockFetcher::ReadBlockContents() {
   if (TryGetUncompressBlockFromPersistentCache()) {
+    ROCKS_LOG_INFO(ioptions_.logger, ">>> [%d:%d] get uncompressed block from persistent cache", compression_type_, do_uncompress_);
     compression_type_ = kNoCompression;
 #ifndef NDEBUG
     contents_->is_raw_block = true;
@@ -235,10 +236,13 @@ IOStatus BlockFetcher::ReadBlockContents() {
     return IOStatus::OK();
   }
   if (TryGetFromPrefetchBuffer()) {
+    ROCKS_LOG_INFO(ioptions_.logger, ">>> [%d:%d] get block from prefetch buffer", compression_type_, do_uncompress_);
     if (!io_status_.ok()) {
       return io_status_;
     }
-  } else if (!TryGetCompressedBlockFromPersistentCache()) {
+  } else if (TryGetCompressedBlockFromPersistentCache()) {
+    ROCKS_LOG_INFO(ioptions_.logger, ">>> [%d:%d] get block from persistent buffer", compression_type_, do_uncompress_);
+  } else {
     IOOptions opts;
     io_status_ = file_->PrepareIOOptions(read_options_, opts);
     // Actual file read
@@ -310,6 +314,7 @@ IOStatus BlockFetcher::ReadBlockContents() {
   }
 
   if (do_uncompress_ && compression_type_ != kNoCompression) {
+    ROCKS_LOG_INFO(ioptions_.logger, ">>> [%d:%d] uncompress block", compression_type_, do_uncompress_);
     PERF_TIMER_GUARD(block_decompress_time);
     // compressed page, uncompress, update cache
     UncompressionContext context(compression_type_);
@@ -322,6 +327,7 @@ IOStatus BlockFetcher::ReadBlockContents() {
 #endif
     compression_type_ = kNoCompression;
   } else {
+    ROCKS_LOG_INFO(ioptions_.logger, ">>> [%d:%d] get block content", compression_type_, do_uncompress_);
     GetBlockContents();
   }
 
