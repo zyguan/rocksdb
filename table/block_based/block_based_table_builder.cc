@@ -118,7 +118,8 @@ Slice CompressBlock(const Slice& raw, const CompressionInfo& info,
                     CompressionType* type, uint32_t format_version,
                     bool do_sample, std::string* compressed_output,
                     std::string* sampled_output_fast,
-                    std::string* sampled_output_slow) {
+                    std::string* sampled_output_slow,
+                    const ImmutableOptions& ioptions) {
   assert(type);
   assert(compressed_output);
   assert(compressed_output->empty());
@@ -168,6 +169,7 @@ Slice CompressBlock(const Slice& raw, const CompressionInfo& info,
   // or the compression fails etc., just fall back to uncompressed
   if (!CompressData(raw, info, GetCompressFormatForVersion(format_version),
                     compressed_output)) {
+    ROCKS_LOG_INFO(ioptions.logger, ">>> compress failed");
     *type = kNoCompression;
     return raw;
   }
@@ -175,6 +177,7 @@ Slice CompressBlock(const Slice& raw, const CompressionInfo& info,
   // Check the compression ratio; if it's not good enough, just fall back to
   // uncompressed
   if (!GoodCompressionRatio(compressed_output->size(), raw.size())) {
+    ROCKS_LOG_INFO(ioptions.logger, ">>> compress not good");
     *type = kNoCompression;
     return raw;
   }
@@ -1138,7 +1141,8 @@ void BlockBasedTableBuilder::CompressAndVerifyBlock(
     *block_contents = CompressBlock(
         raw_block_contents, compression_info, type,
         r->table_options.format_version, is_data_block /* do_sample */,
-        compressed_output, &sampled_output_fast, &sampled_output_slow);
+        compressed_output, &sampled_output_fast, &sampled_output_slow,
+        r->ioptions);
 
     if (sampled_output_slow.size() > 0 || sampled_output_fast.size() > 0) {
       // Currently compression sampling is only enabled for data block.

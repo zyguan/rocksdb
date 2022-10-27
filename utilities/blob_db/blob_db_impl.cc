@@ -1147,8 +1147,11 @@ Slice BlobDBImpl::GetCompressedSlice(const Slice& raw,
   CompressionContext context(type);
   CompressionInfo info(opts, context, CompressionDict::GetEmptyDict(), type,
                        0 /* sample_for_compression */);
-  CompressBlock(raw, info, &type, kBlockBasedTableVersionFormat, false,
-                compression_output, nullptr, nullptr);
+  auto cfh = static_cast<ColumnFamilyHandleImpl*>(DefaultColumnFamily());
+  {
+    CompressBlock(raw, info, &type, kBlockBasedTableVersionFormat, false,
+                  compression_output, nullptr, nullptr, *(cfh->cfd()->ioptions()));
+  }
   return *compression_output;
 }
 
