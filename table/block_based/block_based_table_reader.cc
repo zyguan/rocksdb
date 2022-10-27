@@ -3523,6 +3523,20 @@ Status BlockBasedTable::DumpDataBlocks(std::ostream& out_stream) {
     return s;
   }
 
+  UncompressionDict* dict = nullptr;
+  if (rep_->uncompression_dict_reader) {
+    CachableEntry<UncompressionDict> uncompression_dict;
+    s = rep_->uncompression_dict_reader->GetOrReadUncompressionDictionary(
+        nullptr /* prefetch_buffer */, false /* no_io */,
+        nullptr /* get_context */, nullptr /* lookup_context */,
+        &uncompression_dict);
+    if (!s.ok()) {
+      out_stream << "Can not read Uncompression Dict \n\n";
+      return s;
+    }
+    dict = uncompression_dict.GetValue();
+  }
+
   uint64_t datablock_size_min = std::numeric_limits<uint64_t>::max();
   uint64_t datablock_size_max = 0;
   uint64_t datablock_size_sum = 0;
@@ -3541,8 +3555,20 @@ Status BlockBasedTable::DumpDataBlocks(std::ostream& out_stream) {
     datablock_size_max = std::max(datablock_size_max, datablock_size);
     datablock_size_sum += datablock_size;
 
+    BlockContents contents;
+    BlockFetcher block_fetcher(
+        rep_->file.get(), nullptr, rep_->footer, ReadOptions(), bh,
+        &contents, rep_->ioptions, false /* decompress */, true /*maybe_compressed*/,
+        BlockType::kData, dict ? *dict : UncompressionDict::GetEmptyDict(), rep_->persistent_cache_options);
+    s = block_fetcher.ReadBlockContents();
+    if (!s.ok()) {
+      out_stream << "Error reading the block - Skipped \n\n";
+      continue;
+    }
+
     out_stream << "Data Block # " << block_id << " @ "
-               << blockhandles_iter->value().handle.ToString(true) << "\n";
+               << blockhandles_iter->value().handle.ToString(true)
+               << " (" << CompressionTypeToString(block_fetcher.get_compression_type()) << ")\n";
     out_stream << "--------------------------------------\n";
 
     std::unique_ptr<InternalIterator> datablock_iter;
